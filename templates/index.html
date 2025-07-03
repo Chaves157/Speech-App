@@ -16,7 +16,7 @@
 
     h1 {
       font-size: 1.8em;
-      margin-bottom: 8px;
+      margin-bottom: 10px;
     }
 
     .version {
@@ -41,8 +41,7 @@
 
     #en, #pt {
       white-space: pre-wrap;
-      max-height: 200px;
-      overflow-y: auto;
+      overflow-y: visible;
     }
 
     .trans-container {
@@ -102,7 +101,7 @@
 <body>
 
   <h1>🎤 Tradutor de Voz em Tempo Real</h1>
-  <div class="version">Versão: 1.0 – Atualizado em 03/07/2025 às 18h</div>
+  <div class="version">Versão: última correção de duplicação – Atualizado em 03/07/2025 às 19:00</div>
 
   <div class="block">
     <div class="lang">🎙️ Microfone em uso:</div>
@@ -132,9 +131,7 @@
     const AZURE_REGION = "eastus";
     let recognizer;
     let timer, seconds = 0;
-
-    let textoEN = "";
-    let textoPT = "";
+    let lastEn = "", lastPt = "";
 
     async function detectarMicrofone() {
       try {
@@ -150,20 +147,30 @@
     detectarMicrofone();
 
     function updateStatus(rodando) {
-      document.getElementById("startBtn").disabled = rodando;
-      document.getElementById("stopBtn").disabled = !rodando;
-      const status = document.getElementById("statusText");
-      status.textContent = rodando ? "🟢 Rodando..." : "🔴 Parado...";
-      status.className = rodando ? "rodando" : "parado";
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const statusText = document.getElementById("statusText");
+
+      if (rodando) {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.textContent = "🟢 Rodando...";
+        statusText.className = "rodando";
+      } else {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        statusText.textContent = "🔴 Parado...";
+        statusText.className = "parado";
+      }
     }
 
     function limpar() {
-      textoEN = "";
-      textoPT = "";
       document.getElementById("en").textContent = "---";
       document.getElementById("pt").textContent = "---";
       document.getElementById("custo").textContent = "💵 Custo estimado: US$ 0.000";
       seconds = 0;
+      lastEn = "";
+      lastPt = "";
     }
 
     function atualizarCusto() {
@@ -172,15 +179,8 @@
       document.getElementById("custo").textContent = `💵 Custo estimado: US$ ${custo}`;
     }
 
-    function formatarTextoReconhecimento(texto) {
-      if (!texto) return "";
-      return texto.trim().endsWith(".") ? texto.trim() + " " : texto.trim() + ". ";
-    }
-
-    function start() {
+    async function start() {
       updateStatus(true);
-      textoEN = "";
-      textoPT = "";
       seconds = 0;
       atualizarCusto();
       timer = setInterval(atualizarCusto, 1000);
@@ -193,19 +193,22 @@
       recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
 
       recognizer.recognizing = (s, e) => {
-        if (e.result.reason === SpeechSDK.ResultReason.TranslatingSpeech) {
-          const en = formatarTextoReconhecimento(e.result.text);
-          const pt = formatarTextoReconhecimento(e.result.translations.get("pt"));
+        const en = e.result.text;
+        const pt = e.result.translations.get("pt");
 
-          textoEN += en;
-          textoPT += pt;
+        if (en && en !== lastEn) {
+          const enAtual = document.getElementById("en").textContent.replace("---", "").trim();
+          document.getElementById("en").textContent = (enAtual ? enAtual + ". " : "") + en;
+          lastEn = en;
+        }
 
-          document.getElementById("en").textContent = textoEN;
-          document.getElementById("pt").textContent = textoPT;
+        if (pt && pt !== lastPt) {
+          const ptAtual = document.getElementById("pt").textContent.replace("---", "").trim();
+          document.getElementById("pt").textContent = (ptAtual ? ptAtual + ". " : "") + pt;
+          lastPt = pt;
         }
       };
 
-      // Ignora recognized
       recognizer.startContinuousRecognitionAsync();
     }
 
