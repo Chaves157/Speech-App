@@ -16,12 +16,6 @@
 
     h1 {
       font-size: 1.8em;
-      margin-bottom: 10px;
-    }
-
-    .version {
-      font-size: 0.9em;
-      color: #ccc;
       margin-bottom: 20px;
     }
 
@@ -42,6 +36,7 @@
     #en, #pt {
       white-space: pre-wrap;
       overflow-y: visible;
+      max-height: none;
     }
 
     .trans-container {
@@ -101,7 +96,6 @@
 <body>
 
   <h1>🎤 Tradutor de Voz em Tempo Real</h1>
-  <div class="version">Versão: última correção de duplicação – Atualizado em 03/07/2025 às 19:00</div>
 
   <div class="block">
     <div class="lang">🎙️ Microfone em uso:</div>
@@ -127,11 +121,12 @@
   </div>
 
   <script>
-    const AZURE_KEY = "Bca0tVp6PadXoQ5FOeaFAddiLJKANbCjszBRZBxqvOyDTIYYFvKKJQQJ99BGACYeBjFXJ3w3AAAYACOGHhs9";
+    const AZURE_KEY = "D3VprbMdCeE3b6rvePYSh0x60qK9TznH4vkU1C4Nm9R98IXWfB28JQQJ99BGACYeBjFXJ3w3AAAYACOGFHGg";
     const AZURE_REGION = "eastus";
     let recognizer;
     let timer, seconds = 0;
-    let lastEn = "", lastPt = "";
+    let enHistorico = "";
+    let ptHistorico = "";
 
     async function detectarMicrofone() {
       try {
@@ -169,8 +164,8 @@
       document.getElementById("pt").textContent = "---";
       document.getElementById("custo").textContent = "💵 Custo estimado: US$ 0.000";
       seconds = 0;
-      lastEn = "";
-      lastPt = "";
+      enHistorico = "";
+      ptHistorico = "";
     }
 
     function atualizarCusto() {
@@ -193,19 +188,26 @@
       recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
 
       recognizer.recognizing = (s, e) => {
-        const en = e.result.text;
-        const pt = e.result.translations.get("pt");
-
-        if (en && en !== lastEn) {
-          const enAtual = document.getElementById("en").textContent.replace("---", "").trim();
-          document.getElementById("en").textContent = (enAtual ? enAtual + ". " : "") + en;
-          lastEn = en;
+        const parcial = e.result.text;
+        if (parcial) {
+          document.getElementById("en").textContent = enHistorico + (enHistorico ? ". " : "") + parcial;
+          const parcialPt = e.result.translations.get("pt");
+          if (parcialPt) {
+            document.getElementById("pt").textContent = ptHistorico + (ptHistorico ? ". " : "") + parcialPt;
+          }
         }
+      };
 
-        if (pt && pt !== lastPt) {
-          const ptAtual = document.getElementById("pt").textContent.replace("---", "").trim();
-          document.getElementById("pt").textContent = (ptAtual ? ptAtual + ". " : "") + pt;
-          lastPt = pt;
+      recognizer.recognized = (s, e) => {
+        if (e.result.text) {
+          enHistorico += (enHistorico ? ". " : "") + e.result.text;
+          document.getElementById("en").textContent = enHistorico;
+
+          const pt = e.result.translations.get("pt");
+          if (pt) {
+            ptHistorico += (ptHistorico ? ". " : "") + pt;
+            document.getElementById("pt").textContent = ptHistorico;
+          }
         }
       };
 
