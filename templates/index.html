@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <title>Tradutor de Voz com IA</title>
+  <title>Tradutor de Voz em Tempo Real</title>
   <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
@@ -10,7 +10,13 @@
       font-family: 'Segoe UI', sans-serif;
       background-color: #121212;
       color: #fff;
+      margin: 0;
       padding: 20px;
+    }
+
+    h1 {
+      font-size: 1.8em;
+      margin-bottom: 20px;
     }
 
     .block {
@@ -18,81 +24,193 @@
       border-radius: 12px;
       padding: 16px;
       margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+
+    .lang {
+      font-weight: bold;
+      margin-bottom: 6px;
+      color: #82b1ff;
+    }
+
+    #en, #pt {
+      white-space: pre-wrap;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .trans-container {
+      display: flex;
+      gap: 20px;
+    }
+
+    .trans-container .block {
+      flex: 1;
     }
 
     button {
-      padding: 10px 20px;
-      font-size: 16px;
+      background: #2962ff;
+      border: none;
+      color: white;
+      padding: 10px 16px;
+      margin: 5px 10px 5px 0;
+      font-size: 1em;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:disabled {
+      background: #555;
+      cursor: not-allowed;
+    }
+
+    #statusText {
+      font-size: 1.1em;
+      font-weight: bold;
+      margin-top: 10px;
+    }
+
+    .rodando {
+      color: #00e676;
+      animation: pulse 1.2s infinite;
+    }
+
+    .parado {
+      color: #ff5252;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; }
+      50% { opacity: 0.6; }
+      100% { opacity: 1; }
+    }
+
+    #custo {
+      margin-top: 10px;
+      font-size: 0.95em;
+      color: #ccc;
     }
   </style>
 </head>
 <body>
-  <h1>🎙️ Tradutor de Voz com Insight</h1>
 
-  <button onclick="startRecognition()">▶️ Iniciar Gravação</button>
+  <h1>🎤 Tradutor de Voz em Tempo Real</h1>
 
   <div class="block">
-    <h2>🗣️ Transcrição:</h2>
-    <p id="transcription">...</p>
+    <div class="lang">🎙️ Microfone em uso:</div>
+    <div id="micName">Detectando...</div>
   </div>
 
-  <div class="block">
-    <h2>🌐 Tradução:</h2>
-    <p id="translation">...</p>
-  </div>
+  <button id="startBtn" onclick="start()">▶️ Iniciar</button>
+  <button id="stopBtn" onclick="stop()" disabled>⏹️ Parar</button>
+  <button onclick="limpar()">🧹 Limpar</button>
+  <div id="statusText" class="parado">🔴 Parado...</div>
+  <div id="custo">💵 Custo estimado: US$ 0.000</div>
 
-  <div class="block">
-    <h2>💡 Insight:</h2>
-    <p id="insight">...</p>
+  <div class="trans-container">
+    <div class="block">
+      <div class="lang">Inglês:</div>
+      <div id="en">---</div>
+    </div>
+
+    <div class="block">
+      <div class="lang">Português:</div>
+      <div id="pt">---</div>
+    </div>
   </div>
 
   <script>
-    const subscriptionKey = "Bca0tVp6PadXoQ5FOeaFAddiLJKANbCjszBRZBxqvOyDTIYYFvKKJQQJ99BGACYeBjFXJ3w3AAAYACOGHhs9"; // vazio: Speech SDK usa autenticação do navegador configurado com token
-    const serviceRegion = "eastus"; // Altere conforme sua região Azure
+    const AZURE_KEY = "Bca0tVp6PadXoQ5FOeaFAddiLJKANbCjszBRZBxqvOyDTIYYFvKKJQQJ99BGACYeBjFXJ3w3AAAYACOGHhs9";
+    const AZURE_REGION = "eastus";
+    let recognizer;
+    let timer, seconds = 0;
 
-    function startRecognition() {
-      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
-      speechConfig.speechRecognitionLanguage = "en-US";
-
-      const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
-      const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
-
-      document.getElementById("transcription").textContent = "🎙️ Ouvindo...";
-
-      recognizer.recognizeOnceAsync(result => {
-        const text = result.text;
-        document.getElementById("transcription").textContent = text;
-
-        // Enviar para tradução
-        fetch('/translate', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ text })
-        })
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById("translation").textContent = data.translation;
-        });
-
-        // Enviar para análise
-        fetch('/insight', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({ text })
-        })
-        .then(res => res.json())
-        .then(data => {
-          document.getElementById("insight").textContent = data.insight;
-        });
-
-        recognizer.close();
-      });
+    async function detectarMicrofone() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInput = devices.find(d => d.kind === "audioinput" && d.deviceId === stream.getAudioTracks()[0].getSettings().deviceId);
+        document.getElementById("micName").textContent = audioInput?.label || "Microfone padrão";
+      } catch (err) {
+        document.getElementById("micName").textContent = "Não foi possível acessar o microfone";
+      }
     }
 
-    var SpeechSDK;
-    document.addEventListener("DOMContentLoaded", function () {
-      SpeechSDK = window.SpeechSDK;
-    });
+    detectarMicrofone();
+
+    function updateStatus(rodando) {
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const statusText = document.getElementById("statusText");
+
+      if (rodando) {
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusText.textContent = "🟢 Rodando...";
+        statusText.className = "rodando";
+      } else {
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        statusText.textContent = "🔴 Parado...";
+        statusText.className = "parado";
+      }
+    }
+
+    function limpar() {
+      document.getElementById("en").textContent = "---";
+      document.getElementById("pt").textContent = "---";
+      document.getElementById("custo").textContent = "💵 Custo estimado: US$ 0.000";
+      seconds = 0;
+    }
+
+    function atualizarCusto() {
+      seconds++;
+      const custo = ((seconds / 60) * 0.002).toFixed(3);
+      document.getElementById("custo").textContent = `💵 Custo estimado: US$ ${custo}`;
+    }
+
+    function start() {
+      updateStatus(true);
+      seconds = 0;
+      atualizarCusto();
+      timer = setInterval(atualizarCusto, 1000);
+
+      const speechConfig = SpeechSDK.SpeechTranslationConfig.fromSubscription(AZURE_KEY, AZURE_REGION);
+      speechConfig.speechRecognitionLanguage = "en-US";
+      speechConfig.addTargetLanguage("pt");
+
+      const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+      recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
+
+      recognizer.recognizing = (s, e) => {
+        document.getElementById("en").textContent = e.result.text;
+        const pt = e.result.translations.get("pt");
+        if (pt) document.getElementById("pt").textContent = pt;
+      };
+
+      recognizer.recognized = (s, e) => {
+        if (e.result.text) {
+          document.getElementById("en").textContent = e.result.text;
+          const pt = e.result.translations.get("pt");
+          if (pt) document.getElementById("pt").textContent = pt;
+        }
+      };
+
+      recognizer.startContinuousRecognitionAsync();
+    }
+
+    function stop() {
+      clearInterval(timer);
+      if (recognizer) {
+        recognizer.stopContinuousRecognitionAsync(() => {
+          updateStatus(false);
+        });
+      } else {
+        updateStatus(false);
+      }
+    }
   </script>
+
 </body>
 </html>
