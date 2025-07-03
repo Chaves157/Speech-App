@@ -16,6 +16,12 @@
 
     h1 {
       font-size: 1.8em;
+      margin-bottom: 8px;
+    }
+
+    .version {
+      font-size: 0.9em;
+      color: #ccc;
       margin-bottom: 20px;
     }
 
@@ -96,6 +102,7 @@
 <body>
 
   <h1>🎤 Tradutor de Voz em Tempo Real</h1>
+  <div class="version">Versão: 1.0 – Atualizado em 03/07/2025 às 18h</div>
 
   <div class="block">
     <div class="lang">🎙️ Microfone em uso:</div>
@@ -126,6 +133,9 @@
     let recognizer;
     let timer, seconds = 0;
 
+    let textoEN = "";
+    let textoPT = "";
+
     async function detectarMicrofone() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -140,24 +150,16 @@
     detectarMicrofone();
 
     function updateStatus(rodando) {
-      const startBtn = document.getElementById("startBtn");
-      const stopBtn = document.getElementById("stopBtn");
-      const statusText = document.getElementById("statusText");
-
-      if (rodando) {
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        statusText.textContent = "🟢 Rodando...";
-        statusText.className = "rodando";
-      } else {
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        statusText.textContent = "🔴 Parado...";
-        statusText.className = "parado";
-      }
+      document.getElementById("startBtn").disabled = rodando;
+      document.getElementById("stopBtn").disabled = !rodando;
+      const status = document.getElementById("statusText");
+      status.textContent = rodando ? "🟢 Rodando..." : "🔴 Parado...";
+      status.className = rodando ? "rodando" : "parado";
     }
 
     function limpar() {
+      textoEN = "";
+      textoPT = "";
       document.getElementById("en").textContent = "---";
       document.getElementById("pt").textContent = "---";
       document.getElementById("custo").textContent = "💵 Custo estimado: US$ 0.000";
@@ -170,8 +172,15 @@
       document.getElementById("custo").textContent = `💵 Custo estimado: US$ ${custo}`;
     }
 
+    function formatarTextoReconhecimento(texto) {
+      if (!texto) return "";
+      return texto.trim().endsWith(".") ? texto.trim() + " " : texto.trim() + ". ";
+    }
+
     function start() {
       updateStatus(true);
+      textoEN = "";
+      textoPT = "";
       seconds = 0;
       atualizarCusto();
       timer = setInterval(atualizarCusto, 1000);
@@ -184,19 +193,19 @@
       recognizer = new SpeechSDK.TranslationRecognizer(speechConfig, audioConfig);
 
       recognizer.recognizing = (s, e) => {
-        document.getElementById("en").textContent = e.result.text;
-        const pt = e.result.translations.get("pt");
-        if (pt) document.getElementById("pt").textContent = pt;
-      };
+        if (e.result.reason === SpeechSDK.ResultReason.TranslatingSpeech) {
+          const en = formatarTextoReconhecimento(e.result.text);
+          const pt = formatarTextoReconhecimento(e.result.translations.get("pt"));
 
-      recognizer.recognized = (s, e) => {
-        if (e.result.text) {
-          document.getElementById("en").textContent = e.result.text;
-          const pt = e.result.translations.get("pt");
-          if (pt) document.getElementById("pt").textContent = pt;
+          textoEN += en;
+          textoPT += pt;
+
+          document.getElementById("en").textContent = textoEN;
+          document.getElementById("pt").textContent = textoPT;
         }
       };
 
+      // Ignora recognized
       recognizer.startContinuousRecognitionAsync();
     }
 
