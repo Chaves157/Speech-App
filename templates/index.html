@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tradutor de Voz com IA</title>
+  <script src="https://aka.ms/csspeech/jsbrowserpackageraw"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #121212;
+      color: #fff;
+      padding: 20px;
+    }
+
+    .block {
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎙️ Tradutor de Voz com Insight</h1>
+
+  <button onclick="startRecognition()">▶️ Iniciar Gravação</button>
+
+  <div class="block">
+    <h2>🗣️ Transcrição:</h2>
+    <p id="transcription">...</p>
+  </div>
+
+  <div class="block">
+    <h2>🌐 Tradução:</h2>
+    <p id="translation">...</p>
+  </div>
+
+  <div class="block">
+    <h2>💡 Insight:</h2>
+    <p id="insight">...</p>
+  </div>
+
+  <script>
+    const subscriptionKey = ""; // vazio: Speech SDK usa autenticação do navegador configurado com token
+    const serviceRegion = "eastus"; // Altere conforme sua região Azure
+
+    function startRecognition() {
+      const speechConfig = SpeechSDK.SpeechConfig.fromSubscription(subscriptionKey, serviceRegion);
+      speechConfig.speechRecognitionLanguage = "en-US";
+
+      const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
+      const recognizer = new SpeechSDK.SpeechRecognizer(speechConfig, audioConfig);
+
+      document.getElementById("transcription").textContent = "🎙️ Ouvindo...";
+
+      recognizer.recognizeOnceAsync(result => {
+        const text = result.text;
+        document.getElementById("transcription").textContent = text;
+
+        // Enviar para tradução
+        fetch('/translate', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ text })
+        })
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("translation").textContent = data.translation;
+        });
+
+        // Enviar para análise
+        fetch('/insight', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ text })
+        })
+        .then(res => res.json())
+        .then(data => {
+          document.getElementById("insight").textContent = data.insight;
+        });
+
+        recognizer.close();
+      });
+    }
+
+    var SpeechSDK;
+    document.addEventListener("DOMContentLoaded", function () {
+      SpeechSDK = window.SpeechSDK;
+    });
+  </script>
+</body>
+</html>
